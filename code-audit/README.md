@@ -1,72 +1,84 @@
 # code-audit
 
-检查从网上下载的脚本和代码有没有明显危险行为，按规则打分，输出 A/B/C/D 等级和风险级别，并指出具体是哪一行触发的。
+Checks scripts and code downloaded from the internet for obviously dangerous
+behaviour, scores them, and reports an A/B/C/D grade with a risk level, pointing at
+the exact line that triggered each finding.
 
-不执行、不导入、不联网被检查的内容，纯静态读取。只用 Python 标准库，单个文件，没有第三方依赖。
+The target is never executed, imported, or connected to. Static reading only.
+Pure Python standard library, one file, no dependencies.
 
-## 用法
+## Usage
 
-双击 `启动审查.bat`，默认扫描 `../review-lab`。也可以走命令行：
+- `python audit.py` scans the default directory
+- `python audit.py <dir>` scans one directory
+- `python audit.py <dir1> <dir2>` scans several
+- `python audit.py some.user.js` scans a single file
+- `python audit.py --selftest` runs the self-test
 
-```
-python audit.py                    默认目录
-python audit.py <目录>             指定目录
-python audit.py <目录1> <目录2>     多个目录
-python audit.py some.user.js       单个文件
-python audit.py --selftest         自检
-```
+On Windows, double-click `启动审查.bat` for the same thing.
 
-退出码：`0` = A/B，`1` = C，`2` = D，`3` = 路径错误。
+Exit codes: `0` = A/B, `1` = C, `2` = D, `3` = bad path.
 
-报告写到 `reports/`，同名 `.md` 给人看，`.json` 给程序读。
+Reports go to `reports/`: a `.md` for humans and a `.json` for scripts.
 
-## 检查流程
+## Pipeline
 
-1. **清点**：递归列文件，算大小和 SHA256，按文件头判断真实类型（不看扩展名）
-2. **文件层**：双扩展名、扩展名与真实类型不符、符号链接、可执行文件
-3. **zip 展开**：下载物多数是 zip，直接在内存里逐条读，不解压到磁盘
-4. **内容层**：42 条规则匹配，覆盖 14 个类别
-5. **评分**：按严重度扣分，同类封顶，命中致命项直接判 D
-6. **出报告**：Markdown 明细 + JSON
+1. **Inventory**: walk the tree, compute size and SHA256, identify the real file
+   type from the header bytes rather than the extension
+2. **File level**: double extensions, extension/type mismatch, symlinks, executables
+3. **Archives**: most downloads are zips, so entries are read in memory without
+   extracting anything to disk
+4. **Content**: 42 rules across 14 categories
+5. **Scoring**: weighted deductions, per-category cap, any critical finding forces D
+6. **Report**: markdown detail plus JSON
 
-## 评级
+## Grades
 
-| 等级 | 风险 | 扣分 | 建议 |
-|---|---|---|---|
-| A | 低 | <= 4 | 可以直接打开，仍建议先看入口文件 |
-| B | 中 | 5-19 | 先在沙盒里跑一遍 |
-| C | 高 | 20-39 | 只在沙盒里跑 |
-| D | 极高 | >= 40 或命中致命项 | 不要在本机运行 |
+| Grade | Risk | Deduction | Advice |
+|-------|------|-----------|--------|
+| A | Low | <= 4 | Safe to open, still worth a glance at the entry file |
+| B | Medium | 5-19 | Run it in a sandbox first |
+| C | High | 20-39 | Only in a sandbox |
+| D | Critical | >= 40 or any critical finding | Do not run on your machine |
 
-扣分权重：致命 40 / 高 18 / 中 8 / 低 3 / 提示 0。同一规则跨文件只计一次，同一类别封顶 45 分。
+Weights: critical 40, high 18, medium 8, low 3, info 0. Each rule counts once
+across the whole tree, and each category is capped at 45 points.
 
-## 覆盖的类别
+## Categories
 
-下载即执行、网络外联、凭据隐私（SSH / 浏览器 / 钱包 / 键盘记录）、持久化（注册表 / 计划任务 / 启动目录）、破坏性操作、提权、动态执行、混淆加密、进程命令、安装钩子（npm postinstall / setup.py）、系统修改（hosts / PATH / 防火墙）、反分析（AMSI / VM 检测 / 自删除）、可疑文件、元信息。
+Download-and-execute, network egress, credentials (SSH, browser, wallets,
+keyloggers), persistence (registry, scheduled tasks, startup folder), destructive
+operations, privilege escalation, dynamic execution, obfuscation, process spawning,
+install hooks (npm postinstall, setup.py), system modification (hosts, PATH,
+firewall), anti-analysis (AMSI, VM detection, self-delete), suspicious files,
+metadata.
 
-文档类文件（.md / .txt）里出现的危险命令只作提示，不计分，因为描述不等于执行。
+Dangerous commands that appear in documentation files (.md, .txt) are reported as
+info only, since describing something is not the same as doing it.
 
-## 开机自动运行
+## Autorun
 
-1. Win+R 输入 `shell:startup`，把 `启动审查.bat` 的快捷方式放进去
-2. 或者用任务计划程序，触发器选登录时，操作指向 `启动审查.bat`
+To scan on login, either put a shortcut to `启动审查.bat` in `shell:startup`
+(Win+R, type `shell:startup`), or create a scheduled task that triggers at logon.
 
-## 局限
+## Limitations
 
-- 只看静态特征。二进制里藏东西、运行时才拼装的命令、加密载荷，都可能漏判。
-- 能证明有可疑行为，不能证明安全。A 级不等于干净。
-- 不覆盖依赖链投毒、运行时行为、网络侧流量。
-- 压缩包只展开一层，多层嵌套会标成「包内还有压缩包」，需要手动再展开。
+- Static analysis only. Anything packed in a binary, assembled at runtime, or
+  encrypted will be missed.
+- It can show that suspicious behaviour exists. It cannot show that code is safe.
+  Grade A is not a clean bill of health.
+- No coverage for supply-chain attacks inside dependencies, runtime behaviour, or
+  network traffic.
+- Archives are opened one level deep; nested archives are flagged but not followed.
 
-## 许可
+## License
 
-未附带 LICENSE 文件，默认保留所有权利。只依赖 Python 标准库（PSF 许可）。
+No LICENSE file is bundled with this subdirectory; see the repository root.
+Depends only on the Python standard library (PSF license).
 
-## 目录
+## Layout
 
-```
-audit.py          主程序
-启动审查.bat       双击即跑
-README.md
-reports/          生成的报告（md + json），不入库
-```
+- `audit.py` main program
+- `启动审查.bat` double-click launcher
+- `README.md`
+- `reports/` generated reports, not committed
