@@ -1,42 +1,45 @@
 # audit-tools
 
-两个检查「从网上下载的代码能不能用」的小工具。纯 Python 标准库，没有第三方依赖。
+Two small tools that check whether code downloaded from the internet is safe to run.
+Pure Python standard library, no third-party dependencies.
 
-起因：克隆一个项目、跑一个脚本之前，想知道它会读我什么、装什么、连哪里。现成工具要么要装一堆依赖，要么要把代码上传到别人的服务器，所以自己写了两个。
+Before cloning a repo or running a script, I want to know what it reads, what it
+installs, and where it connects. Most tools in this space either pull in a pile of
+dependencies or upload your code to someone else's server, so I wrote these instead.
 
-| 工具 | 查什么 | 入口 |
-|---|---|---|
-| [code-audit](code-audit/) | 代码本身写了什么：危险命令、凭据访问、持久化、混淆 | `python audit.py <目录>` |
-| [dep-audit](dep-audit/) | 它要拉进来什么：山寨包、可疑来源、安装钩子、传递依赖 | `python depaudit.py <目录>` |
+| Tool | What it checks | Entry point |
+|------|----------------|-------------|
+| [code-audit](code-audit/) | What the code does: dangerous commands, credential access, persistence, obfuscation | `python audit.py <dir>` |
+| [dep-audit](dep-audit/) | What the code pulls in: typosquats, untrusted sources, install hooks, transitive dependencies | `python depaudit.py <dir>` |
 
-## 共同点
+## Shared properties
 
-- 只读：不执行、不导入、不联网被检查的内容
-- 零依赖：只用 Python 标准库，一个文件就能跑
-- 同一套评级口径
+- Read-only: the target code is never executed, imported, or sent anywhere
+- Zero dependencies: one file per tool, standard library only
+- The same scoring scale across both tools
 
-| 等级 | 风险 | 含义 |
-|---|---|---|
-| A | 低 | 没发现可疑行为 |
-| B | 中 | 有几处需要留意 |
-| C | 高 | 有明确的危险行为 |
-| D | 极高 | 有致命项，不要在本机运行 |
+| Grade | Risk | Meaning |
+|-------|------|---------|
+| A | Low | No suspicious behaviour found |
+| B | Medium | A few things worth a look |
+| C | High | Clear dangerous behaviour |
+| D | Critical | Fatal findings, do not run on your machine |
 
-命中致命项直接判 D。常见的是下载即执行、读 SSH 私钥、写开机自启、npm 安装钩子。
+Any critical finding forces grade D. The usual ones are download-and-execute,
+SSH key access, autorun persistence, and npm install hooks.
 
-## 用法
+## Usage
+cd code-audit && python audit.py ../some-project cd dep-audit && python depaudit.py ../some-project --online
 
-```
-cd code-audit  && python audit.py ../某项目
-cd dep-audit   && python depaudit.py ../某项目 --online
-```
+Both tools support `--selftest`, which runs offline.
 
-两个工具都支持 `--selftest` 自检，不需要联网。
+## Limitations
 
-## 局限
+Static analysis only catches behaviour with a visible signature. Anything hiding in
+a binary, assembled at runtime, or shipped through a hijacked upstream package will
+not show up. The output is a risk estimate, not proof of safety.
 
-静态分析只能发现「有明显特征」的行为。二进制里的东西、运行时才拼出来的命令、官方包被接管后投毒，都看不出来。给出的是可疑程度，不是安全证明。
+## License
 
-## 许可
-
-PolyForm Noncommercial License 1.0.0。可以阅读、学习、修改，用于个人和研究用途；商业用途需要单独授权。
+PolyForm Noncommercial License 1.0.0. You may read, study, modify and use this for
+personal and research purposes. Commercial use requires a separate license.
